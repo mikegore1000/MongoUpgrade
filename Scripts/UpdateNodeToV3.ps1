@@ -5,7 +5,7 @@
     [Parameter(Mandatory=$true)]
     [ValidateScript({Test-Path $_ })]
     [string]$mongoBinDirectory,    
-    [string]$mongoUpgradeZip = ".\mongodb-win32-x86_64-enterprise-windows-64-3.0.11.zip"
+    [string]$mongoUpgradeZip = ".\mongodb-win32-x86_64-enterprise-windows-64-3.0.12.zip"
 )
 
 function Unzip
@@ -52,10 +52,10 @@ if(-Not ((Test-Path $mongoUpgradeZip) -and ([System.IO.Path]::GetExtension($mong
     return
 }
 
-$unzippedDestination = Join-Path $env:TEMP "mongodb_3.0.11_unpacked\"
+$unzippedDestination = Join-Path $env:TEMP "mongodb_3.0.12_unpacked\"
 Unzip $mongoUpgradeZip $unzippedDestination
 
-$binDirectory = Join-Path $unzippedDestination mongodb-win32-x86_64-enterprise-windows-64-3.0.11\bin
+$binDirectory = Join-Path $unzippedDestination mongodb-win32-x86_64-enterprise-windows-64-3.0.12\bin
 
 if(-Not { Test-Path $binDirectory })
 {
