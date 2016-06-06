@@ -4,64 +4,72 @@
     [string]$mongoServiceName,
     [Parameter(Mandatory=$true)]
     [ValidateScript({Test-Path $_ })]
-    [string]$mongoBinDirectory,    
-    [string]$mongoUpgradeZip = ".\mongodb-win32-x86_64-enterprise-windows-64-3.0.12.zip"
+    [string]$mongoDirectory,    
+    [string]$mongoUpgradeMsi = ".\mongodb-win32-x86_64-enterprise-windows-64-3.0.12-signed.msi",
+    [string]$configFileSource = ".\configs\mongoconfig.conf",
+    [string]$configFileToUpgrade = (Join-Path $mongoDirectory  "mongodb.conf")
 )
 
-function Unzip
+function ReplaceConfiguration()
 {
-    param([string]$zipFilePath, [string]$outPath)
+    param([string]$source, [string]$configFileToUpgrade)
 
-    New-Item -ItemType Directory -Path $outPath -Force | Out-Null
-
-    $source = (Get-ChildItem $zipFilePath).FullName
-
-    $shell = new-object -com shell.application
-    $zipfile = $shell.namespace($source)
-
-    $destination = $shell.namespace($outPath)
-    $destination.Copyhere($zipfile.items(), 0x14)
+    Write-Host "Copying configuration from $source to $configFileToUpgrade"
+    Copy-Item $source $configFileToUpgrade
+    
 }
 
-function UpgradeMongo
+function StopMongo()
 {
-    param([string]$serviceName, [string]$sourcePath, [string]$destPath)
+    param([string]$serviceName)
 
-    $sourceFiles = Join-Path $sourcePath "*"
-
-    Write-Host "Upgrading Mongo from binaries at $sourceFiles to $destPath"
     Write-Host "Stopping service $serviceName"
-    Stop-Service $serviceName -ErrorAction Stop
 
-    Write-Host "Copying files"
-    Copy-Item -Path $sourceFiles -Destination $destPath -ErrorAction Stop
+    if(Get-Service $serviceName | Where { $_.Status -eq "Running" })
+    {
+        Stop-Service $serviceName -ErrorAction Stop
+    }
+}
+
+function StartMongo
+{
+    param([string]$serviceName)
 
     Write-Host "Starting service $serviceName" -ErrorAction Stop
-    Start-Service $serviceName
+    Start-Service $serviceName        
 }
 
-if(-Not { Join-Path $mongoBinDirectory "mongod.exe" | Test-Path })
+function InstallMsi
 {
-    Write-Error "$mongoBinDirectory doesn't contain the mongod.exe please check the supplied value is correct"
+    param([string] $msiPath, $installDir)
+
+    Write-Host "Installing Mongo"
+        
+    $fullMsiPath = Resolve-Path $msiPath
+    $fullInstallLocation = Resolve-Path $installDir
+    $arguments = "/qr /i `"$fullMsiPath`" INSTALLLOCATION=`"$fullInstallLocation`" ADDLOCAL=`"all`""
+    $process = Start-Process msiexec.exe $arguments -Wait -PassThru
+
+    return $process.ExitCode -eq 0        
+}
+
+if(-Not ((Test-Path $mongoUpgradeMsi) -and ([System.IO.Path]::GetExtension($mongoUpgradeMsi) -eq ".msi")))
+{
+    Write-Error "$mongoUpgradeMsi isn't an MSI file or the file does not exist"
     return
 }
 
-if(-Not ((Test-Path $mongoUpgradeZip) -and ([System.IO.Path]::GetExtension($mongoUpgradeZip) -eq ".zip")))
+if(!(Join-Path $mongoDirectory "bin\mongod.exe" | Test-Path))
 {
-    Write-Error "$mongoUpgradeZip isn't a zip file or the file does not exist"
+    Write-Error "$mongoDirectory doesn't contain a bin directory with mongo binaries please check the supplied value is correct"
     return
 }
 
-$unzippedDestination = Join-Path $env:TEMP "mongodb_3.0.12_unpacked\"
-Unzip $mongoUpgradeZip $unzippedDestination
+StopMongo $mongoServiceName
 
-$binDirectory = Join-Path $unzippedDestination mongodb-win32-x86_64-enterprise-windows-64-3.0.12\bin
-
-if(-Not { Test-Path $binDirectory })
+if(InstallMsi $mongoUpgradeMsi $mongoDirectory)
 {
-    Write-Error "File unzipped at $unzippedDestination doesn't contain the expected structure, verify you pointed it to a Mongo 3.0.11 zip"
-    return
+    ReplaceConfiguration $configFileSource $configFileToUpgrade
+    StartMongo $mongoServiceName
+    Write-Warning "Mongo upgraded and service started, please verify everything is ok!"
 }
-
-UpgradeMongo $mongoServiceName $binDirectory $mongoBinDirectory
-Write-Warning "Mongo upgraded and service started, please verify everything is ok!"
