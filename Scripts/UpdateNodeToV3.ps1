@@ -3,14 +3,36 @@
     [ValidateScript({Get-Service $_ -ErrorAction SilentlyContinue})]
     [string]$mongoServiceName,
     [Parameter(Mandatory=$true)]
-    [ValidateScript({Test-Path $_ })]
+    [ValidateScript({Test-Path $_ -PathType Container })]
     [string]$mongoDirectory,    
     [string]$mongoUpgradeMsi = ".\mongodb-win32-x86_64-enterprise-windows-64-3.0.12-signed.msi",
-    [ValidateScript({Test-Path $_ })]
+    [ValidateScript({Test-Path $_ -PathType Leaf })]
     [string]$configFileSource = ".\configs\mongoconfig.conf",
-    [ValidateScript({Test-Path $_ })]
-    [string]$configFileToUpgrade = (Join-Path $mongoDirectory  "mongodb.conf")
+    [ValidateScript({Test-Path $_ -PathType Leaf })]
+    [string]$configFileToUpgrade = (Join-Path $mongoDirectory  "mongodb.conf"),
+    [ValidateScript({Test-Path $_ -PathType Container })]
+    [string]$mongoDataDirectory,
+    [bool]$deleteDataFiles = $false,
+    [bool]$upgradeMongo = $true,
+    [bool]$replaceConfig = $true
 )
+
+$yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes","Description."
+$no = New-Object System.Management.Automation.Host.ChoiceDescription "&No","Description."
+$cancel = New-Object System.Management.Automation.Host.ChoiceDescription "&Cancel","Description."
+$options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+
+function DeleteDataFiles()
+{       
+    $result = $host.ui.PromptForChoice("Delete MongoDB data files", "Are you sure you want to delete the data files at $mongoDataDirectory`?  This process is irreversable.", $options, 1)
+    switch ($result) {
+        0
+        {
+            Write-Host "Deleting data files from $mongoDataDirectory"
+            Get-ChildItem $mongoDataDirectory | Remove-Item -Force
+        }
+    }
+}
 
 function ReplaceConfiguration()
 {
@@ -69,9 +91,20 @@ if(!(Join-Path $mongoDirectory "bin\mongod.exe" | Test-Path))
 
 StopMongo $mongoServiceName
 
-if(InstallMsi $mongoUpgradeMsi $mongoDirectory)
+if($deleteDataFiles)
+{
+    DeleteDataFiles
+}
+
+if($upgradeMongo)
+{
+    InstallMsi $mongoUpgradeMsi $mongoDirectory
+}
+
+if($replaceConfig)
 {
     ReplaceConfiguration $configFileSource $configFileToUpgrade
-    StartMongo $mongoServiceName
-    Write-Warning "Mongo upgraded and service started, please verify everything is ok!"
 }
+
+StartMongo $mongoServiceName
+Write-Warning "Script completed and service started, please verify everything is ok!"
