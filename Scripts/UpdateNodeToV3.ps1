@@ -14,7 +14,8 @@
     [string]$mongoDataDirectory,
     [bool]$deleteDataFiles = $false,
     [bool]$upgradeMongo = $true,
-    [bool]$replaceConfig = $true
+    [bool]$replaceConfig = $true,
+    [bool]$startService = $true
 )
 
 $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes","Description."
@@ -29,7 +30,7 @@ function DeleteDataFiles()
         0
         {
             Write-Host "Deleting data files from $mongoDataDirectory"
-            Get-ChildItem $mongoDataDirectory | Remove-Item -Force
+            Get-ChildItem $mongoDataDirectory | Remove-Item -Force -Recurse
         }
     }
 }
@@ -106,5 +107,9 @@ if($replaceConfig)
     ReplaceConfiguration $configFileSource $configFileToUpgrade
 }
 
-StartMongo $mongoServiceName
-Write-Warning "Script completed and service started, please verify everything is ok!"
+if($startService)
+{
+    StartMongo $mongoServiceName
+}
+
+Write-Warning "Script completed, please verify everything is ok!"
