@@ -6,7 +6,9 @@
     [ValidateScript({Test-Path $_ })]
     [string]$mongoDirectory,    
     [string]$mongoUpgradeMsi = ".\mongodb-win32-x86_64-enterprise-windows-64-3.0.12-signed.msi",
+    [ValidateScript({Test-Path $_ })]
     [string]$configFileSource = ".\configs\mongoconfig.conf",
+    [ValidateScript({Test-Path $_ })]
     [string]$configFileToUpgrade = (Join-Path $mongoDirectory  "mongodb.conf")
 )
 
